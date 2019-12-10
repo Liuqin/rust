@@ -1,5 +1,7 @@
 // General test of maybe_uninits state computed by MIR dataflow.
 
+// ignore-test Temporarily ignored while this analysis is migrated to the new framework.
+
 #![feature(core_intrinsics, rustc_attrs)]
 
 use std::intrinsics::rustc_peek;

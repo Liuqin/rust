@@ -194,6 +194,30 @@ impl<'tcx> Body<'tcx> {
         }
     }
 
+    /// Returns a partially initialized MIR body containing only a list of basic blocks.
+    ///
+    /// The returned MIR contains no `LocalDecl`s (even for the return place) or source scopes. It
+    /// is only useful for testing but cannot be `#[cfg(test)]` because it is used in a different
+    /// crate.
+    pub fn new_cfg_only(basic_blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>) -> Self {
+        Body {
+            phase: MirPhase::Build,
+            basic_blocks,
+            source_scopes: IndexVec::new(),
+            yield_ty: None,
+            generator_drop: None,
+            generator_layout: None,
+            local_decls: IndexVec::new(),
+            user_type_annotations: IndexVec::new(),
+            arg_count: 0,
+            spread_arg: None,
+            span: syntax_pos::DUMMY_SP,
+            control_flow_destroyed: Vec::new(),
+            generator_kind: None,
+            var_debug_info: Vec::new(),
+        }
+    }
+
     #[inline]
     pub fn basic_blocks(&self) -> &IndexVec<BasicBlock, BasicBlockData<'tcx>> {
         &self.basic_blocks

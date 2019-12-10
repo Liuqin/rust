@@ -34,11 +34,10 @@ impl<Q: Qualif> QualifCursor<'a, 'mir, 'tcx, Q> {
     pub fn new(
         q: Q,
         item: &'a Item<'mir, 'tcx>,
-        dead_unwinds: &BitSet<BasicBlock>,
     ) -> Self {
         let analysis = FlowSensitiveAnalysis::new(q, item);
         let results =
-            dataflow::Engine::new(item.tcx, &item.body, item.def_id, dead_unwinds, analysis)
+            dataflow::Engine::new_generic(item.tcx, &item.body, item.def_id, analysis)
                 .iterate_to_fixpoint();
         let cursor = dataflow::ResultsCursor::new(*item.body, results);
 
@@ -155,20 +154,17 @@ impl Validator<'a, 'mir, 'tcx> {
     pub fn new(
         item: &'a Item<'mir, 'tcx>,
     ) -> Self {
-        let dead_unwinds = BitSet::new_empty(item.body.basic_blocks().len());
-
         let needs_drop = QualifCursor::new(
             NeedsDrop,
             item,
-            &dead_unwinds,
         );
 
         let has_mut_interior = QualifCursor::new(
             HasMutInterior,
             item,
-            &dead_unwinds,
         );
 
+        let dead_unwinds = BitSet::new_empty(item.body.basic_blocks().len());
         let indirectly_mutable = old_dataflow::do_dataflow(
             item.tcx,
             &*item.body,

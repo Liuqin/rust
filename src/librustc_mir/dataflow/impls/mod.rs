@@ -13,6 +13,7 @@ use crate::util::elaborate_drops::DropFlagState;
 
 use super::move_paths::{HasMoveData, MoveData, MovePathIndex, InitIndex, InitKind};
 use super::{BitDenotation, BottomValue, GenKillSet};
+use super::generic::GenKill;
 
 use super::drop_flag_effects_for_function_entry;
 use super::drop_flag_effects_for_location;
@@ -226,7 +227,7 @@ impl<'a, 'tcx> HasMoveData<'tcx> for EverInitializedPlaces<'a, 'tcx> {
 }
 
 impl<'a, 'tcx> MaybeInitializedPlaces<'a, 'tcx> {
-    fn update_bits(trans: &mut GenKillSet<MovePathIndex>,
+    fn update_bits(trans: &mut impl GenKill<MovePathIndex>,
                    path: MovePathIndex,
                    state: DropFlagState)
     {
@@ -261,56 +262,69 @@ impl<'a, 'tcx> DefinitelyInitializedPlaces<'a, 'tcx> {
     }
 }
 
-impl<'a, 'tcx> BitDenotation<'tcx> for MaybeInitializedPlaces<'a, 'tcx> {
+impl<'tcx> super::generic::AnalysisDomain<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
     type Idx = MovePathIndex;
-    fn name() -> &'static str { "maybe_init" }
-    fn bits_per_block(&self) -> usize {
+
+    const NAME: &'static str = "maybe_init";
+
+    fn bits_per_block(&self, _: &mir::Body<'tcx>) -> usize {
         self.move_data().move_paths.len()
     }
 
-    fn start_block_effect(&self, entry_set: &mut BitSet<MovePathIndex>) {
+    fn initialize_start_block(&self, _: &mir::Body<'tcx>, state: &mut BitSet<Self::Idx>) {
         drop_flag_effects_for_function_entry(
             self.tcx, self.body, self.mdpe,
             |path, s| {
                 assert!(s == DropFlagState::Present);
-                entry_set.insert(path);
+                state.insert(path);
             });
     }
 
-    fn statement_effect(&self,
-                        trans: &mut GenKillSet<Self::Idx>,
-                        location: Location)
-    {
-        drop_flag_effects_for_location(
-            self.tcx, self.body, self.mdpe,
-            location,
-            |path, s| Self::update_bits(trans, path, s)
-        )
+    fn pretty_print_idx(&self, w: &mut impl std::io::Write, mpi: Self::Idx) -> std::io::Result<()> {
+        write!(w, "{:?}", self.move_data().move_paths[mpi])
     }
+}
 
-    fn terminator_effect(&self,
-                         trans: &mut GenKillSet<Self::Idx>,
-                         location: Location)
-    {
-        drop_flag_effects_for_location(
-            self.tcx, self.body, self.mdpe,
-            location,
-            |path, s| Self::update_bits(trans, path, s)
-        )
-    }
-
-    fn propagate_call_return(
+impl<'tcx> super::generic::GenKillAnalysis<'tcx> for MaybeInitializedPlaces<'_, 'tcx> {
+    fn statement_effect(
         &self,
-        in_out: &mut BitSet<MovePathIndex>,
-        _call_bb: mir::BasicBlock,
-        _dest_bb: mir::BasicBlock,
+        trans: &mut impl GenKill<Self::Idx>,
+        _statement: &mir::Statement<'tcx>,
+        location: Location,
+    ) {
+        drop_flag_effects_for_location(
+            self.tcx, self.body, self.mdpe,
+            location,
+            |path, s| Self::update_bits(trans, path, s)
+        )
+    }
+
+    fn terminator_effect(
+        &self,
+        trans: &mut impl GenKill<Self::Idx>,
+        _terminator: &mir::Terminator<'tcx>,
+        location: Location,
+    ) {
+        drop_flag_effects_for_location(
+            self.tcx, self.body, self.mdpe,
+            location,
+            |path, s| Self::update_bits(trans, path, s)
+        )
+    }
+
+    fn call_return_effect(
+        &self,
+        trans: &mut impl GenKill<Self::Idx>,
+        _block: mir::BasicBlock,
+        _func: &mir::Operand<'tcx>,
+        _args: &[mir::Operand<'tcx>],
         dest_place: &mir::Place<'tcx>,
     ) {
         // when a call returns successfully, that means we need to set
         // the bits for that dest_place to 1 (initialized).
         on_lookup_result_bits(self.tcx, self.body, self.move_data(),
                               self.move_data().rev_lookup.find(dest_place.as_ref()),
-                              |mpi| { in_out.insert(mpi); });
+                              |mpi| { trans.gen(mpi); });
     }
 }
 

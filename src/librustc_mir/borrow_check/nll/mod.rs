@@ -3,8 +3,8 @@ use crate::borrow_check::location::LocationTable;
 use crate::borrow_check::nll::facts::AllFactsExt;
 use crate::borrow_check::nll::type_check::{MirTypeckResults, MirTypeckRegionConstraints};
 use crate::borrow_check::nll::region_infer::values::RegionValueElements;
+use crate::dataflow::generic::ResultsCursor;
 use crate::dataflow::move_paths::{InitLocation, MoveData, InitKind};
-use crate::dataflow::FlowAtLocation;
 use crate::dataflow::MaybeInitializedPlaces;
 use crate::transform::MirSource;
 use crate::borrow_check::Upvar;
@@ -165,7 +165,7 @@ pub(in crate::borrow_check) fn compute_regions<'cx, 'tcx>(
     upvars: &[Upvar],
     location_table: &LocationTable,
     param_env: ty::ParamEnv<'tcx>,
-    flow_inits: &mut FlowAtLocation<'tcx, MaybeInitializedPlaces<'cx, 'tcx>>,
+    flow_inits: &mut ResultsCursor<'cx, 'tcx, MaybeInitializedPlaces<'cx, 'tcx>>,
     move_data: &MoveData<'tcx>,
     borrow_set: &BorrowSet<'tcx>,
     errors_buffer: &mut Vec<Diagnostic>,
